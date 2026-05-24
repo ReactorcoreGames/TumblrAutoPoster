@@ -1,0 +1,25 @@
+name: Tumblr Poster
+on:
+  schedule:
+    - cron: '0 12 * * *'   # once per day at noon UTC
+  workflow_dispatch:
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install requests
+      - name: Run poster
+        env:
+          TUMBLR_API_KEY: ${{ secrets.TUMBLR_API_KEY }}
+          TUMBLR_API_SECRET: ${{ secrets.TUMBLR_API_SECRET }}
+          TUMBLR_ACCESS_TOKEN: ${{ secrets.TUMBLR_ACCESS_TOKEN }}
+          TUMBLR_ACCESS_TOKEN_SECRET: ${{ secrets.TUMBLR_ACCESS_TOKEN_SECRET }}
+          TUMBLR_BLOG_NAME: ${{ secrets.TUMBLR_BLOG_NAME }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python poster.py
