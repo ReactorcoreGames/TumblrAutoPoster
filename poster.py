@@ -121,24 +121,36 @@ def load_state():
     return {}
 
 def fetch_og_image(url):
-    try:
-        from html.parser import HTMLParser
-        class OGParser(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.image = None
-            def handle_starttag(self, tag, attrs):
-                if tag == 'meta' and not self.image:
-                    d = dict(attrs)
-                    if d.get('property') == 'og:image' and 'content' in d:
-                        self.image = d['content']
-        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
-        p = OGParser()
-        p.feed(resp.text)
-        return p.image
-    except Exception as e:
-        print(f"Warning: could not fetch og:image from {url}: {e}")
-        return None
+    from html.parser import HTMLParser
+    class OGParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.image = None
+        def handle_starttag(self, tag, attrs):
+            if tag == 'meta' and not self.image:
+                d = dict(attrs)
+                if d.get('property') == 'og:image' and 'content' in d:
+                    self.image = d['content']
+
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 429:
+                print(f"og:image fetch: rate limited (attempt {attempt + 1}), retrying...")
+                time.sleep(3)
+                continue
+            if resp.status_code != 200:
+                print(f"Warning: og:image fetch returned {resp.status_code} for {url}")
+                return None
+            p = OGParser()
+            p.feed(resp.text)
+            return p.image
+        except Exception as e:
+            print(f"Warning: could not fetch og:image from {url}: {e}")
+            return None
+    print(f"Warning: og:image fetch failed after 3 attempts for {url}")
+    return None
 
 def post_to_tumblr(title, url, tags):
     try:
@@ -147,7 +159,7 @@ def post_to_tumblr(title, url, tags):
 
         if image_url:
             # Photo post: cover image fills the post, caption has description + plain URL
-            caption = f'{title} {url}'
+            caption = f'{title} <a href="{url}">{url}</a>'
             form = {
                 'type': 'photo',
                 'source': image_url,
