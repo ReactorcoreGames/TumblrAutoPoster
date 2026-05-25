@@ -17,8 +17,9 @@ Owner: Reactorcore (reactorcoregames@gmail.com)
 
 ## Key design decisions
 - **Linear, not cyclic** — `next_index = last_index + 1`. When `next_index >= len(posts)` print "All posts published." and `sys.exit(0)`. Do NOT use modulo.
-- **Tumblr NPF v2 endpoint** — `POST https://api.tumblr.com/v2/blog/{TUMBLR_BLOG_NAME}/posts`
-- **Link post body** — `content[0]` is type `link` with `url`, `title`, `description` (description == title). Tags are bare strings (no `#`).
+- **Tumblr legacy endpoint** — `POST https://api.tumblr.com/v2/blog/{TUMBLR_BLOG_NAME}/post` (singular — the NPF `/posts` endpoint returns 8001 errors)
+- **Post type** — `photo` when an `og:image` can be scraped from the URL (covers ~all itch.io pages); falls back to `link` if none found. Photo post fields: `source` (og:image URL), `caption` (CSV title + space + URL as plain text), `link` (the URL), `tags`, `state`. Form fields must be included in the OAuth signature base string or Tumblr returns 401.
+- **og:image fetch** — `fetch_og_image(url)` in poster.py does a simple GET + HTMLParser scan for `<meta property="og:image">`. No extra dependencies — uses `requests` and stdlib `html.parser`.
 - **Auth** — OAuth 1.0a. Functions `create_oauth_signature()` and `create_oauth_header()` are identical in structure to the Twitter version; only the env var names differ.
 - **No media upload** — Tumblr auto-generates link previews from the URL.
 - **CSV tags** — `hashtags` column is space-separated `#tag` strings. Strip `#` with `t.lstrip('#')` before sending.

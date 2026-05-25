@@ -32,22 +32,23 @@ def create_oauth_signature(method, url, params, api_secret, token_secret):
     ).decode()
     return signature
 
-def create_oauth_header(method, url, params=None):
-    if params is None:
-        params = {}
+def create_oauth_header(method, url, extra_params=None):
+    if extra_params is None:
+        extra_params = {}
     oauth_params = {
         'oauth_consumer_key': API_KEY,
-        'oauth_nonce': secrets.token_urlsafe(32),
+        'oauth_nonce': secrets.token_hex(16),
         'oauth_signature_method': 'HMAC-SHA1',
         'oauth_timestamp': str(int(time.time())),
         'oauth_token': ACCESS_TOKEN,
         'oauth_version': '1.0'
     }
-    all_params = {**oauth_params, **params}
-    encoded_params = {k: urllib.parse.quote(str(v), safe='') for k, v in all_params.items()}
+    # extra_params (form fields) must be included in the signature base string
+    all_params = {**oauth_params, **extra_params}
+    encoded_params = {urllib.parse.quote(str(k), safe=''): urllib.parse.quote(str(v), safe='') for k, v in all_params.items()}
     signature = create_oauth_signature(method, url, encoded_params, API_SECRET, ACCESS_TOKEN_SECRET)
     oauth_params['oauth_signature'] = signature
-    oauth_header = 'OAuth ' + ', '.join([f'{k}="{urllib.parse.quote(str(v), safe="")}"' for k, v in oauth_params.items()])
+    oauth_header = 'OAuth ' + ', '.join([f'{urllib.parse.quote(str(k), safe="")}="{urllib.parse.quote(str(v), safe="")}"' for k, v in sorted(oauth_params.items())])
     return oauth_header
 
 def main():
@@ -85,7 +86,7 @@ def main():
 
         tags = [t.lstrip('#') for t in hashtags.split() if t]
 
-        print(f"Posting row {next_index + 2}: {title}")
+        print(f"Posting row {next_index + 2}: {url}")
         post_to_tumblr(title, url, tags)
         update_state(next_index)
         commit_changes(next_index)
@@ -119,26 +120,56 @@ def load_state():
             return {}
     return {}
 
+def fetch_og_image(url):
+    try:
+        from html.parser import HTMLParser
+        class OGParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.image = None
+            def handle_starttag(self, tag, attrs):
+                if tag == 'meta' and not self.image:
+                    d = dict(attrs)
+                    if d.get('property') == 'og:image' and 'content' in d:
+                        self.image = d['content']
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        p = OGParser()
+        p.feed(resp.text)
+        return p.image
+    except Exception as e:
+        print(f"Warning: could not fetch og:image from {url}: {e}")
+        return None
+
 def post_to_tumblr(title, url, tags):
     try:
-        endpoint = f'https://api.tumblr.com/v2/blog/{BLOG_NAME}/posts'
-        headers = {
-            'Authorization': create_oauth_header('POST', endpoint),
-            'Content-Type': 'application/json'
-        }
-        body = {
-            "content": [
-                {
-                    "type": "link",
-                    "url": url,
-                    "title": title,
-                    "description": title
-                }
-            ],
-            "tags": tags,
-            "state": "published"
-        }
-        resp = requests.post(endpoint, headers=headers, json=body)
+        endpoint = f'https://api.tumblr.com/v2/blog/{BLOG_NAME}/post'
+        image_url = fetch_og_image(url)
+
+        if image_url:
+            # Photo post: cover image fills the post, caption has description + plain URL
+            caption = f'{title} {url}'
+            form = {
+                'type': 'photo',
+                'source': image_url,
+                'caption': caption,
+                'link': url,
+                'tags': ','.join(tags),
+                'state': 'published',
+            }
+            print(f"Using photo post with og:image: {image_url}")
+        else:
+            # Fallback: plain link post if no image found
+            form = {
+                'type': 'link',
+                'url': url,
+                'description': title,
+                'tags': ','.join(tags),
+                'state': 'published',
+            }
+            print("No og:image found, falling back to link post.")
+
+        headers = {'Authorization': create_oauth_header('POST', endpoint, form)}
+        resp = requests.post(endpoint, headers=headers, data=form)
         resp.raise_for_status()
         post_id = resp.json().get('response', {}).get('id')
         print(f"Post published successfully! Post ID: {post_id}")

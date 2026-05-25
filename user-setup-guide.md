@@ -70,8 +70,8 @@ This step generates the two tokens that let the bot post on your behalf. You onl
    ```
 4. It will print a URL. Open that URL in your browser.
 5. You'll see a Tumblr page asking you to authorize the app. Click **Allow**.
-6. Tumblr will show you a PIN (a short number). Copy it.
-7. Go back to the terminal, paste the PIN, press Enter.
+6. Tumblr will redirect your browser to your callback URL (`reactorcoregames.github.io`). The redirect URL will look like: `https://reactorcoregames.github.io/?oauth_token=...&oauth_verifier=XXXXXXXXXX` — copy the `oauth_verifier` value (the long string after `oauth_verifier=`).
+7. Go back to the terminal, paste the `oauth_verifier` value, press Enter.
 8. The script will print two lines:
    ```
    TUMBLR_ACCESS_TOKEN        = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
