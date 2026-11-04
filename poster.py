@@ -71,6 +71,15 @@ def main():
         last_index = state.get('last_row_index', -1)
         next_index = last_index + 1
 
+        # Skip rows whose URL Tumblr can't accept (e.g. mailto:), which would
+        # otherwise fail with 8001 "Invalid URL" and block the queue forever.
+        while next_index < len(posts):
+            candidate = posts[next_index].get('url', '').strip().lower()
+            if candidate.startswith(('http://', 'https://')):
+                break
+            print(f"Skipping row {next_index + 2}: non-http URL '{candidate}'")
+            next_index += 1
+
         if next_index >= len(posts):
             print("All posts published.")
             sys.exit(0)
